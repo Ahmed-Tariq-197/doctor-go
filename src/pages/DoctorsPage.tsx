@@ -3,7 +3,7 @@
 // Browse and filter all doctors
 // ============================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Doctor } from '@/types';
 import { getDoctors } from '@/services/api';
@@ -11,26 +11,26 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import DoctorCard from '@/components/doctors/DoctorCard';
 import MapPlaceholder from '@/components/doctors/MapPlaceholder';
-import SearchFilters from '@/components/doctors/SearchFilters';
+import SearchFilters, { SortOption } from '@/components/doctors/SearchFilters';
 import { Loader2 } from 'lucide-react';
 
 const DoctorsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | undefined>();
   
   // Filter states
   const [nameFilter, setNameFilter] = useState(searchParams.get('search') || '');
   const [specialtyFilter, setSpecialtyFilter] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('rating');
 
   useEffect(() => {
     loadDoctors();
   }, []);
 
-  useEffect(() => {
-    // Apply filters whenever they change
+  // Apply filters and sorting
+  const filteredDoctors = useMemo(() => {
     let filtered = [...doctors];
 
     if (nameFilter) {
@@ -46,8 +46,24 @@ const DoctorsPage: React.FC = () => {
       );
     }
 
-    setFilteredDoctors(filtered);
-  }, [doctors, nameFilter, specialtyFilter]);
+    // Apply sorting
+    switch (sortBy) {
+      case 'rating':
+        filtered.sort((a, b) => b.rating - a.rating);
+        break;
+      case 'price-low':
+        filtered.sort((a, b) => a.cost - b.cost);
+        break;
+      case 'price-high':
+        filtered.sort((a, b) => b.cost - a.cost);
+        break;
+      case 'queue':
+        filtered.sort((a, b) => a.queueLength - b.queueLength);
+        break;
+    }
+
+    return filtered;
+  }, [doctors, nameFilter, specialtyFilter, sortBy]);
 
   const loadDoctors = async () => {
     setIsLoading(true);
@@ -55,7 +71,6 @@ const DoctorsPage: React.FC = () => {
       const response = await getDoctors();
       if (response.success && response.data) {
         setDoctors(response.data);
-        setFilteredDoctors(response.data);
       }
     } catch (error) {
       console.error('Failed to load doctors:', error);
@@ -88,8 +103,10 @@ const DoctorsPage: React.FC = () => {
             <SearchFilters
               nameFilter={nameFilter}
               specialtyFilter={specialtyFilter}
+              sortBy={sortBy}
               onNameChange={setNameFilter}
               onSpecialtyChange={setSpecialtyFilter}
+              onSortChange={setSortBy}
               onClear={handleClearFilters}
             />
           </div>
