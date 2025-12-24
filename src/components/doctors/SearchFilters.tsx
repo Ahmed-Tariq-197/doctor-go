@@ -33,6 +33,9 @@ const specialties = [
   'Orthopedics',
 ];
 
+// Radix Select doesn't allow empty string values for SelectItem.
+const ALL_SPECIALTIES_VALUE = 'all';
+
 const SearchFilters: React.FC<SearchFiltersProps> = ({
   nameFilter,
   specialtyFilter,
@@ -58,15 +61,20 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
 
         {/* Specialty Filter */}
         <div className="w-full md:w-64">
-          <Select value={specialtyFilter} onValueChange={onSpecialtyChange}>
+          <Select
+            value={specialtyFilter || undefined}
+            onValueChange={(value) =>
+              onSpecialtyChange(value === ALL_SPECIALTIES_VALUE ? '' : value)
+            }
+          >
             <SelectTrigger>
               <SelectValue placeholder="All Specialties" />
             </SelectTrigger>
             <SelectContent>
               {specialties.map((specialty) => (
-                <SelectItem 
-                  key={specialty} 
-                  value={specialty === 'All Specialties' ? '' : specialty}
+                <SelectItem
+                  key={specialty}
+                  value={specialty === 'All Specialties' ? ALL_SPECIALTIES_VALUE : specialty}
                 >
                   {specialty}
                 </SelectItem>
