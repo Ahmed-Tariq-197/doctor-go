@@ -3,7 +3,7 @@
 // Displays doctor info in a card format
 // ============================================
 
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Doctor } from '@/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
@@ -15,11 +15,11 @@ interface DoctorCardProps {
   doctor: Doctor;
 }
 
-const DoctorCard: React.FC<DoctorCardProps> = ({ doctor }) => {
+const DoctorCard = forwardRef<HTMLDivElement, DoctorCardProps>(({ doctor }, ref) => {
   const navigate = useNavigate();
 
   return (
-    <Card className="h-full hover:shadow-lg transition-shadow duration-200 overflow-hidden">
+    <Card ref={ref} className="h-full hover:shadow-lg transition-shadow duration-200 overflow-hidden">
       <CardContent className="p-6">
         {/* Doctor Avatar Placeholder */}
         <div className="flex items-start gap-4">
@@ -96,6 +96,8 @@ const DoctorCard: React.FC<DoctorCardProps> = ({ doctor }) => {
       </CardFooter>
     </Card>
   );
-};
+});
+
+DoctorCard.displayName = 'DoctorCard';
 
 export default DoctorCard;
