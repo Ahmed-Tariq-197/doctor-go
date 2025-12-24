@@ -13,17 +13,23 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Search, X, ArrowUpDown } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Search, X, ArrowUpDown, MapPin, Loader2 } from 'lucide-react';
 
-export type SortOption = 'rating' | 'price-low' | 'price-high' | 'queue';
+export type SortOption = 'rating' | 'price-low' | 'price-high' | 'queue' | 'distance';
 
 interface SearchFiltersProps {
   nameFilter: string;
   specialtyFilter: string;
   sortBy: SortOption;
+  maxDistance: number;
+  userLocation: { lat: number; lng: number } | null;
+  isLocating: boolean;
   onNameChange: (value: string) => void;
   onSpecialtyChange: (value: string) => void;
   onSortChange: (value: SortOption) => void;
+  onMaxDistanceChange: (value: number) => void;
+  onRequestLocation: () => void;
   onClear: () => void;
 }
 
@@ -45,21 +51,27 @@ const sortOptions: { value: SortOption; label: string }[] = [
   { value: 'price-low', label: 'Price: Low to High' },
   { value: 'price-high', label: 'Price: High to Low' },
   { value: 'queue', label: 'Shortest Queue' },
+  { value: 'distance', label: 'Nearest First' },
 ];
 
 const SearchFilters: React.FC<SearchFiltersProps> = ({
   nameFilter,
   specialtyFilter,
   sortBy,
+  maxDistance,
+  userLocation,
+  isLocating,
   onNameChange,
   onSpecialtyChange,
   onSortChange,
+  onMaxDistanceChange,
+  onRequestLocation,
   onClear,
 }) => {
   const hasFilters = nameFilter || specialtyFilter;
 
   return (
-    <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
+    <div className="bg-card border border-border rounded-lg p-4 shadow-sm space-y-4">
       <div className="flex flex-col md:flex-row gap-4">
         {/* Name Search */}
         <div className="relative flex-1">
@@ -119,6 +131,40 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
             <X className="h-4 w-4" />
             Clear
           </Button>
+        )}
+      </div>
+
+      {/* Distance Filter */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-2 border-t border-border">
+        <Button
+          variant={userLocation ? 'secondary' : 'outline'}
+          size="sm"
+          onClick={onRequestLocation}
+          disabled={isLocating}
+          className="gap-2 shrink-0"
+        >
+          {isLocating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <MapPin className="h-4 w-4" />
+          )}
+          {userLocation ? 'Location Set' : 'Use My Location'}
+        </Button>
+
+        {userLocation && (
+          <div className="flex-1 flex items-center gap-4 w-full">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              Within {maxDistance} km
+            </span>
+            <Slider
+              value={[maxDistance]}
+              onValueChange={([value]) => onMaxDistanceChange(value)}
+              min={1}
+              max={50}
+              step={1}
+              className="flex-1"
+            />
+          </div>
         )}
       </div>
     </div>
