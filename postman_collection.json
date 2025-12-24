@@ -1,0 +1,14 @@
+{
+  "info": { "name": "DoctorGo API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "variable": [{ "key": "baseUrl", "value": "http://localhost:3001" }],
+  "item": [
+    { "name": "Login", "request": { "method": "POST", "url": "{{baseUrl}}/api/auth/login", "header": [{"key": "Content-Type", "value": "application/json"}], "body": { "mode": "raw", "raw": "{\"email\": \"patient@test.com\", \"password\": \"password123\"}" }}},
+    { "name": "Get Doctors", "request": { "method": "GET", "url": "{{baseUrl}}/api/doctors" }},
+    { "name": "Get Doctor Profile", "request": { "method": "GET", "url": "{{baseUrl}}/api/doctors/1" }},
+    { "name": "Join Queue", "request": { "method": "POST", "url": "{{baseUrl}}/api/queue", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}], "body": { "mode": "raw", "raw": "{\"doctorId\": 1}" }}},
+    { "name": "Get Queue", "request": { "method": "GET", "url": "{{baseUrl}}/api/queue?doctorId=1" }},
+    { "name": "Book Appointment", "request": { "method": "POST", "url": "{{baseUrl}}/api/appointments", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}], "body": { "mode": "raw", "raw": "{\"doctorId\": 1, \"appointmentTime\": \"2025-12-25T10:00:00\"}" }}},
+    { "name": "Mock Payment", "request": { "method": "POST", "url": "{{baseUrl}}/api/payments/mock", "header": [{"key": "Content-Type", "value": "application/json"}], "body": { "mode": "raw", "raw": "{\"appointmentId\": 1, \"amount\": 75}" }}},
+    { "name": "Get Recommendations", "request": { "method": "GET", "url": "{{baseUrl}}/api/recommendation?query=chest%20pain" }}
+  ]
+}
