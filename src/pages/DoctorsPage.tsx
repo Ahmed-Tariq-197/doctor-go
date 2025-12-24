@@ -3,7 +3,7 @@
 // Browse and filter all doctors
 // ============================================
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Doctor } from '@/types';
 import { getDoctors } from '@/services/api';
@@ -13,6 +13,13 @@ import DoctorCard from '@/components/doctors/DoctorCard';
 import MapPlaceholder from '@/components/doctors/MapPlaceholder';
 import SearchFilters, { SortOption } from '@/components/doctors/SearchFilters';
 import { Loader2 } from 'lucide-react';
+import { calculateDistance } from '@/lib/distance';
+import { toast } from 'sonner';
+
+interface UserLocation {
+  lat: number;
+  lng: number;
+}
 
 const DoctorsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -24,14 +31,60 @@ const DoctorsPage: React.FC = () => {
   const [nameFilter, setNameFilter] = useState(searchParams.get('search') || '');
   const [specialtyFilter, setSpecialtyFilter] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('rating');
+  const [maxDistance, setMaxDistance] = useState(25);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
 
   useEffect(() => {
     loadDoctors();
   }, []);
 
-  // Apply filters and sorting
+  // Request user location
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setSortBy('distance');
+        setIsLocating(false);
+        toast.success('Location detected');
+      },
+      (error) => {
+        setIsLocating(false);
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            toast.error('Location access denied. Please enable location permissions.');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            toast.error('Location information is unavailable.');
+            break;
+          case error.TIMEOUT:
+            toast.error('Location request timed out.');
+            break;
+          default:
+            toast.error('An error occurred while getting your location.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, []);
+
+  // Apply filters and sorting with distance calculation
   const filteredDoctors = useMemo(() => {
-    let filtered = [...doctors];
+    let filtered = doctors.map((doctor) => ({
+      ...doctor,
+      distance: userLocation
+        ? calculateDistance(userLocation.lat, userLocation.lng, doctor.lat, doctor.lng)
+        : undefined,
+    }));
 
     if (nameFilter) {
       filtered = filtered.filter(d =>
@@ -44,6 +97,11 @@ const DoctorsPage: React.FC = () => {
       filtered = filtered.filter(d =>
         d.specialty.toLowerCase() === specialtyFilter.toLowerCase()
       );
+    }
+
+    // Apply distance filter if location is set
+    if (userLocation) {
+      filtered = filtered.filter(d => d.distance !== undefined && d.distance <= maxDistance);
     }
 
     // Apply sorting
@@ -60,10 +118,15 @@ const DoctorsPage: React.FC = () => {
       case 'queue':
         filtered.sort((a, b) => a.queueLength - b.queueLength);
         break;
+      case 'distance':
+        if (userLocation) {
+          filtered.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+        }
+        break;
     }
 
     return filtered;
-  }, [doctors, nameFilter, specialtyFilter, sortBy]);
+  }, [doctors, nameFilter, specialtyFilter, sortBy, userLocation, maxDistance]);
 
   const loadDoctors = async () => {
     setIsLoading(true);
@@ -104,9 +167,14 @@ const DoctorsPage: React.FC = () => {
               nameFilter={nameFilter}
               specialtyFilter={specialtyFilter}
               sortBy={sortBy}
+              maxDistance={maxDistance}
+              userLocation={userLocation}
+              isLocating={isLocating}
               onNameChange={setNameFilter}
               onSpecialtyChange={setSpecialtyFilter}
               onSortChange={setSortBy}
+              onMaxDistanceChange={setMaxDistance}
+              onRequestLocation={requestLocation}
               onClear={handleClearFilters}
             />
           </div>
@@ -133,6 +201,7 @@ const DoctorsPage: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-foreground">
                   {filteredDoctors.length} {filteredDoctors.length === 1 ? 'Doctor' : 'Doctors'} Found
+                  {userLocation && ` within ${maxDistance} km`}
                 </h2>
               </div>
 
