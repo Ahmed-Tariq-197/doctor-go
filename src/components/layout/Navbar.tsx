@@ -14,7 +14,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { 
-  Stethoscope, 
   User, 
   LogOut, 
   LayoutDashboard, 
@@ -22,6 +21,7 @@ import {
   Menu,
   X
 } from 'lucide-react';
+import doctorGoLogo from '@/assets/doctorgo-logo.png';
 
 const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -39,8 +39,7 @@ const Navbar: React.FC = () => {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <Stethoscope className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold text-foreground">DoctorGo</span>
+            <img src={doctorGoLogo} alt="DoctorGo" className="h-10 w-auto" />
           </Link>
 
           {/* Desktop Navigation */}
