@@ -5,7 +5,8 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Stethoscope, Mail, Phone, MapPin } from 'lucide-react';
+import { Mail, Phone, MapPin } from 'lucide-react';
+import doctorGoLogo from '@/assets/doctorgo-logo.png';
 
 const Footer: React.FC = () => {
   return (
@@ -15,8 +16,7 @@ const Footer: React.FC = () => {
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <Stethoscope className="h-6 w-6 text-primary" />
-              <span className="text-lg font-bold text-foreground">DoctorGo</span>
+              <img src={doctorGoLogo} alt="DoctorGo" className="h-8 w-auto mix-blend-multiply dark:mix-blend-screen dark:invert" />
             </div>
             <p className="text-sm text-muted-foreground">
               Your trusted healthcare companion. Find doctors, book appointments, and manage your health journey with ease.
