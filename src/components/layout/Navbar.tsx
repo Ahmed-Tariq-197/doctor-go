@@ -39,7 +39,7 @@ const Navbar: React.FC = () => {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <img src={doctorGoLogo} alt="DoctorGo" className="h-10 w-auto" />
+            <img src={doctorGoLogo} alt="DoctorGo" className="h-10 w-auto mix-blend-multiply dark:mix-blend-screen dark:invert" />
           </Link>
 
           {/* Desktop Navigation */}
