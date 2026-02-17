@@ -25,7 +25,7 @@ const DoctorsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<number | undefined>();
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string | undefined>();
   
   // Filter states
   const [nameFilter, setNameFilter] = useState(searchParams.get('search') || '');

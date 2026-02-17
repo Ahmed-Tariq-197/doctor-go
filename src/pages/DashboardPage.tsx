@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Appointment, QueueEntry } from '@/types';
 import { getAppointments, getQueue, inviteNextPatient, updateAppointment } from '@/services/api';
-import { mockDoctors } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import AppointmentList from '@/components/appointments/AppointmentList';
@@ -17,13 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Calendar,
-  Users,
-  Clock,
-  Stethoscope,
-  Search,
-  Brain,
-  Loader2,
+  Calendar, Users, Clock, Stethoscope, Search, Brain, Loader2,
 } from 'lucide-react';
 
 const DashboardPage: React.FC = () => {
@@ -35,45 +29,39 @@ const DashboardPage: React.FC = () => {
   const [queueEntries, setQueueEntries] = useState<QueueEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInviting, setIsInviting] = useState(false);
+  const [doctorId, setDoctorId] = useState<string | null>(null);
 
-  // Redirect if not logged in
   useEffect(() => {
-    if (!user) {
-      navigate('/auth');
-    }
+    if (!user) { navigate('/auth'); }
   }, [user, navigate]);
 
   useEffect(() => {
-    if (user) {
-      loadData();
-    }
+    if (user) { loadData(); }
   }, [user]);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // For doctors, get their appointments and queue
       if (user?.role === 'doctor') {
-        const doctorData = mockDoctors.find(d => d.name === user.name);
+        // Find the doctor record linked to this user
+        const { data: doctorData } = await supabase
+          .from('doctors')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
         if (doctorData) {
+          setDoctorId(doctorData.id);
           const [appointmentsRes, queueRes] = await Promise.all([
             getAppointments(doctorData.id),
             getQueue(doctorData.id),
           ]);
-
-          if (appointmentsRes.success && appointmentsRes.data) {
-            setAppointments(appointmentsRes.data);
-          }
-          if (queueRes.success && queueRes.data) {
-            setQueueEntries(queueRes.data);
-          }
+          if (appointmentsRes.success && appointmentsRes.data) setAppointments(appointmentsRes.data);
+          if (queueRes.success && queueRes.data) setQueueEntries(queueRes.data);
         }
       } else {
-        // For patients, just get their appointments
         const appointmentsRes = await getAppointments();
-        if (appointmentsRes.success && appointmentsRes.data) {
-          setAppointments(appointmentsRes.data);
-        }
+        if (appointmentsRes.success && appointmentsRes.data) setAppointments(appointmentsRes.data);
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -83,80 +71,49 @@ const DashboardPage: React.FC = () => {
   };
 
   const handleInviteNext = async () => {
-    if (user?.role !== 'doctor') return;
-
-    const doctorData = mockDoctors.find(d => d.name === user.name);
-    if (!doctorData) return;
-
+    if (!doctorId) return;
     setIsInviting(true);
     try {
-      const response = await inviteNextPatient(doctorData.id);
+      const response = await inviteNextPatient(doctorId);
       if (response.success) {
-        if (response.data) {
-          toast({
-            title: 'Patient invited',
-            description: `${response.data.patientName} has been invited.`,
-          });
-        } else {
-          toast({
-            title: 'Queue empty',
-            description: 'There are no patients waiting in the queue.',
-          });
-        }
+        toast({
+          title: response.data ? 'Patient invited' : 'Queue empty',
+          description: response.data ? `${response.data.patientName} has been invited.` : 'No patients waiting.',
+        });
         loadData();
       }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to invite next patient.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to invite next patient.', variant: 'destructive' });
     } finally {
       setIsInviting(false);
     }
   };
 
-  const handleCancelAppointment = async (id: number) => {
+  const handleCancelAppointment = async (id: string) => {
     try {
       const response = await updateAppointment(id, 'cancelled');
       if (response.success) {
-        toast({
-          title: 'Appointment cancelled',
-          description: 'The appointment has been cancelled.',
-        });
+        toast({ title: 'Appointment cancelled' });
         loadData();
       }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to cancel appointment.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', variant: 'destructive' });
     }
   };
 
-  const handleCompleteAppointment = async (id: number) => {
+  const handleCompleteAppointment = async (id: string) => {
     try {
       const response = await updateAppointment(id, 'completed');
       if (response.success) {
-        toast({
-          title: 'Appointment completed',
-          description: 'The appointment has been marked as completed.',
-        });
+        toast({ title: 'Appointment completed' });
         loadData();
       }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to complete appointment.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', variant: 'destructive' });
     }
   };
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const isDoctor = user.role === 'doctor' || user.role === 'secretary';
   const upcomingAppointments = appointments.filter(a => a.status === 'scheduled');
@@ -165,19 +122,12 @@ const DashboardPage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
-
       <main className="flex-1 py-8 px-4">
         <div className="container mx-auto">
-          {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              Welcome back, {user.name.split(' ')[0]}!
-            </h1>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, {user.name.split(' ')[0] || 'User'}!</h1>
             <p className="text-muted-foreground">
-              {isDoctor 
-                ? 'Manage your appointments and patient queue' 
-                : 'View your appointments and find doctors'
-              }
+              {isDoctor ? 'Manage your appointments and patient queue' : 'View your appointments and find doctors'}
             </p>
           </div>
 
@@ -197,9 +147,7 @@ const DashboardPage: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Upcoming</p>
-                        <p className="text-2xl font-bold text-foreground">
-                          {upcomingAppointments.length}
-                        </p>
+                        <p className="text-2xl font-bold text-foreground">{upcomingAppointments.length}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -214,9 +162,7 @@ const DashboardPage: React.FC = () => {
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">In Queue</p>
-                          <p className="text-2xl font-bold text-foreground">
-                            {waitingPatients.length}
-                          </p>
+                          <p className="text-2xl font-bold text-foreground">{waitingPatients.length}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -231,9 +177,7 @@ const DashboardPage: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Completed</p>
-                        <p className="text-2xl font-bold text-foreground">
-                          {appointments.filter(a => a.status === 'completed').length}
-                        </p>
+                        <p className="text-2xl font-bold text-foreground">{appointments.filter(a => a.status === 'completed').length}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -243,91 +187,45 @@ const DashboardPage: React.FC = () => {
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                        {isDoctor ? (
-                          <Stethoscope className="h-6 w-6 text-primary" />
-                        ) : (
-                          <Search className="h-6 w-6 text-primary" />
-                        )}
+                        {isDoctor ? <Stethoscope className="h-6 w-6 text-primary" /> : <Search className="h-6 w-6 text-primary" />}
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">
-                          {isDoctor ? 'Your Profile' : 'Find Doctors'}
-                        </p>
-                        <p className="text-sm font-medium text-primary">
-                          {isDoctor ? 'View & Edit →' : 'Browse →'}
-                        </p>
+                        <p className="text-sm text-muted-foreground">{isDoctor ? 'Your Profile' : 'Find Doctors'}</p>
+                        <p className="text-sm font-medium text-primary">{isDoctor ? 'View & Edit →' : 'Browse →'}</p>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Main Content Grid */}
+              {/* Main Content */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Appointments */}
                 <div className="lg:col-span-2">
-                  <AppointmentList
-                    appointments={appointments}
-                    isDoctor={isDoctor}
-                    onCancel={handleCancelAppointment}
-                    onComplete={isDoctor ? handleCompleteAppointment : undefined}
-                  />
+                  <AppointmentList appointments={appointments} isDoctor={isDoctor} onCancel={handleCancelAppointment} onComplete={isDoctor ? handleCompleteAppointment : undefined} />
                 </div>
-
-                {/* Sidebar */}
                 <div className="space-y-6">
-                  {/* Queue (Doctor Only) */}
-                  {isDoctor && (
-                    <QueueDisplay
-                      entries={queueEntries}
-                      isDoctor={true}
-                      onInviteNext={handleInviteNext}
-                      isLoading={isInviting}
-                    />
-                  )}
-
-                  {/* Quick Actions */}
+                  {isDoctor && <QueueDisplay entries={queueEntries} isDoctor={true} onInviteNext={handleInviteNext} isLoading={isInviting} />}
                   <Card>
-                    <CardHeader>
-                      <CardTitle>Quick Actions</CardTitle>
-                    </CardHeader>
+                    <CardHeader><CardTitle>Quick Actions</CardTitle></CardHeader>
                     <CardContent className="space-y-3">
                       {!isDoctor && (
                         <>
-                          <Button 
-                            className="w-full gap-2" 
-                            onClick={() => navigate('/doctors')}
-                          >
-                            <Stethoscope className="h-4 w-4" />
-                            Find a Doctor
+                          <Button className="w-full gap-2" onClick={() => navigate('/doctors')}>
+                            <Stethoscope className="h-4 w-4" /> Find a Doctor
                           </Button>
-                          <Button 
-                            variant="outline" 
-                            className="w-full gap-2"
-                            onClick={() => navigate('/recommendations')}
-                          >
-                            <Brain className="h-4 w-4" />
-                            Get Recommendations
+                          <Button variant="outline" className="w-full gap-2" onClick={() => navigate('/recommendations')}>
+                            <Brain className="h-4 w-4" /> Get Recommendations
                           </Button>
                         </>
                       )}
                       {isDoctor && (
                         <>
-                          <Button 
-                            className="w-full gap-2"
-                            disabled={waitingPatients.length === 0 || isInviting}
-                            onClick={handleInviteNext}
-                          >
+                          <Button className="w-full gap-2" disabled={waitingPatients.length === 0 || isInviting} onClick={handleInviteNext}>
                             {isInviting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                            <Users className="h-4 w-4" />
-                            Invite Next Patient
+                            <Users className="h-4 w-4" /> Invite Next Patient
                           </Button>
-                          <Button 
-                            variant="outline" 
-                            className="w-full gap-2"
-                          >
-                            <Calendar className="h-4 w-4" />
-                            Manage Availability
+                          <Button variant="outline" className="w-full gap-2">
+                            <Calendar className="h-4 w-4" /> Manage Availability
                           </Button>
                         </>
                       )}
@@ -339,7 +237,6 @@ const DashboardPage: React.FC = () => {
           )}
         </div>
       </main>
-
       <Footer />
     </div>
   );

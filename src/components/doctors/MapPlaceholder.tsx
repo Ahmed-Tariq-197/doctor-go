@@ -1,20 +1,42 @@
 // ============================================
-// Map Placeholder Component
-// Shows a simple map representation
-// Can be replaced with real map library later
+// Interactive Map Component
+// Uses Leaflet for real map display
 // ============================================
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Doctor, Clinic } from '@/types';
-import { MapPin, ExternalLink } from 'lucide-react';
 
 interface MapPlaceholderProps {
   doctors?: Doctor[];
   clinics?: Clinic[];
-  selectedId?: number;
-  onMarkerClick?: (id: number) => void;
+  selectedId?: string;
+  onMarkerClick?: (id: string) => void;
   height?: string;
 }
+
+// Fix Leaflet default icon issue
+const defaultIcon = L.icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+const selectedIcon = L.icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [30, 49],
+  iconAnchor: [15, 49],
+  popupAnchor: [1, -40],
+  shadowSize: [49, 49],
+  className: 'selected-marker',
+});
 
 const MapPlaceholder: React.FC<MapPlaceholderProps> = ({
   doctors = [],
@@ -23,115 +45,101 @@ const MapPlaceholder: React.FC<MapPlaceholderProps> = ({
   onMarkerClick,
   height = '300px',
 }) => {
-  // Use doctors if provided, otherwise use clinics
-  const locations = doctors.length > 0 
-    ? doctors.map(d => ({ 
-        id: d.id, 
-        name: d.clinicName, 
-        lat: d.lat, 
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+
+  // Build locations from doctors or clinics
+  const locations = doctors.length > 0
+    ? doctors.map(d => ({
+        id: d.id,
+        name: d.clinicName || 'Clinic',
+        lat: d.lat,
         lng: d.lng,
-        doctorName: d.name 
+        doctorName: d.name,
+        specialty: d.specialty,
       }))
-    : clinics.map(c => ({ 
-        id: c.id, 
-        name: c.name, 
-        lat: c.lat, 
+    : clinics.map(c => ({
+        id: c.id,
+        name: c.name,
+        lat: c.lat,
         lng: c.lng,
-        doctorName: undefined 
+        doctorName: undefined as string | undefined,
+        specialty: undefined as string | undefined,
       }));
 
-  // Get unique locations
-  const uniqueLocations = locations.filter(
-    (loc, index, self) =>
-      index === self.findIndex(l => l.lat === loc.lat && l.lng === loc.lng)
-  );
+  // Initialize map
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current) return;
 
-  const openInMaps = (lat: number, lng: number, name: string) => {
-    const url = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}&zoom=15#map=15/${lat}/${lng}`;
-    window.open(url, '_blank');
-  };
+    const map = L.map(mapRef.current, {
+      center: [40.7128, -74.006],
+      zoom: 12,
+      scrollWheelZoom: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
+  // Update markers when locations change
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // Remove old markers
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
+
+    if (locations.length === 0) return;
+
+    // Add new markers
+    const bounds = L.latLngBounds([]);
+
+    locations.forEach(loc => {
+      const isSelected = loc.id === selectedId;
+      const marker = L.marker([loc.lat, loc.lng], {
+        icon: isSelected ? selectedIcon : defaultIcon,
+      }).addTo(map);
+
+      // Popup content
+      let popupContent = `<strong>${loc.name}</strong>`;
+      if (loc.doctorName) popupContent += `<br/>${loc.doctorName}`;
+      if (loc.specialty) popupContent += `<br/><em>${loc.specialty}</em>`;
+      marker.bindPopup(popupContent);
+
+      if (onMarkerClick) {
+        marker.on('click', () => onMarkerClick(loc.id));
+      }
+
+      if (isSelected) {
+        marker.openPopup();
+      }
+
+      bounds.extend([loc.lat, loc.lng]);
+      markersRef.current.push(marker);
+    });
+
+    // Fit map to show all markers
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    }
+  }, [locations, selectedId, onMarkerClick]);
 
   return (
-    <div 
-      className="relative bg-accent/30 rounded-lg overflow-hidden border border-border"
-      style={{ height }}
-    >
-      {/* Map Background Pattern */}
-      <div className="absolute inset-0 opacity-10">
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-
-      {/* Map Title */}
-      <div className="absolute top-4 left-4 bg-card/90 backdrop-blur px-3 py-1.5 rounded-md border border-border">
-        <span className="text-sm font-medium text-foreground">Map View</span>
-      </div>
-
-      {/* Location Markers */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 max-w-full overflow-auto">
-          {uniqueLocations.slice(0, 6).map((location) => (
-            <button
-              key={location.id}
-              onClick={() => onMarkerClick?.(location.id)}
-              className={`
-                group flex flex-col items-center gap-2 p-3 rounded-lg transition-all
-                ${selectedId === location.id 
-                  ? 'bg-primary text-primary-foreground shadow-lg scale-105' 
-                  : 'bg-card/90 hover:bg-card text-foreground hover:shadow-md'
-                }
-              `}
-            >
-              <MapPin 
-                className={`h-6 w-6 ${
-                  selectedId === location.id ? 'text-primary-foreground' : 'text-primary'
-                }`} 
-              />
-              <span className="text-xs font-medium text-center line-clamp-2">
-                {location.name}
-              </span>
-              {location.doctorName && (
-                <span className={`text-xs ${
-                  selectedId === location.id ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                }`}>
-                  {location.doctorName}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Open in Maps Button */}
-      {uniqueLocations.length > 0 && (
-        <button
-          onClick={() => {
-            const firstLoc = uniqueLocations[0];
-            openInMaps(firstLoc.lat, firstLoc.lng, firstLoc.name);
-          }}
-          className="absolute bottom-4 right-4 flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          <ExternalLink className="h-4 w-4" />
-          Open in Maps
-        </button>
-      )}
-
-      {/* Empty State */}
-      {uniqueLocations.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <MapPin className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No locations to display</p>
-          </div>
-        </div>
-      )}
-    </div>
+    <div
+      ref={mapRef}
+      className="rounded-lg overflow-hidden border border-border"
+      style={{ height, width: '100%' }}
+    />
   );
 };
 
