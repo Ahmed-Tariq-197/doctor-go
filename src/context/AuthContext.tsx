@@ -1,18 +1,13 @@
 // ============================================
 // Authentication Context
-// Manages user login state across the app
+// Uses Supabase Auth for real authentication
 // ============================================
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserRole, AuthContextType } from '@/types';
-import { mockUsers } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
 
-// Create the context with a default undefined value
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Storage keys for persistence
-const TOKEN_KEY = 'doctorgo_token';
-const USER_KEY = 'doctorgo_user';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -20,65 +15,73 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load saved auth state on mount
+  // Listen for auth state changes - set up BEFORE getSession
   useEffect(() => {
-    const savedToken = localStorage.getItem(TOKEN_KEY);
-    const savedUser = localStorage.getItem(USER_KEY);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          // Fetch profile data using setTimeout to avoid deadlock
+          setTimeout(async () => {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('user_id', session.user.id)
+              .maybeSingle();
 
-    if (savedToken && savedUser) {
-      try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
-        // Clear invalid data
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY);
+            setUser({
+              id: session.user.id,
+              name: profile?.full_name || session.user.email?.split('@')[0] || '',
+              email: session.user.email || '',
+              role: (profile?.role as UserRole) || 'patient',
+              createdAt: session.user.created_at,
+            });
+            setIsLoading(false);
+          }, 0);
+        } else {
+          setUser(null);
+          setIsLoading(false);
+        }
       }
-    }
-    setIsLoading(false);
-  }, []);
-
-  // Login function - simulates API call
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    setIsLoading(true);
-    
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Find user in mock data
-    const foundUser = mockUsers.find(
-      u => u.email.toLowerCase() === email.toLowerCase() && u.password === password
     );
 
-    if (!foundUser) {
+    // Check for existing session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+
+        setUser({
+          id: session.user.id,
+          name: profile?.full_name || session.user.email?.split('@')[0] || '',
+          email: session.user.email || '',
+          role: (profile?.role as UserRole) || 'patient',
+          createdAt: session.user.created_at,
+        });
+      }
       setIsLoading(false);
-      return { success: false, error: 'Invalid email or password' };
-    }
+    });
 
-    // Create mock token and user object (without password)
-    const mockToken = `mock_jwt_${Date.now()}_${foundUser.id}`;
-    const userWithoutPassword: User = {
-      id: foundUser.id,
-      name: foundUser.name,
-      email: foundUser.email,
-      role: foundUser.role,
-      createdAt: foundUser.createdAt,
-    };
+    return () => subscription.unsubscribe();
+  }, []);
 
-    // Save to state and localStorage
-    setToken(mockToken);
-    setUser(userWithoutPassword);
-    localStorage.setItem(TOKEN_KEY, mockToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(userWithoutPassword));
-
+  // Login with email and password
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setIsLoading(false);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
     return { success: true };
   };
 
-  // Signup function - simulates API call
+  // Signup with email and password
   const signup = async (
     name: string,
     email: string,
@@ -86,58 +89,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     role: UserRole
   ): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    setIsLoading(false);
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Check if email already exists
-    const existingUser = mockUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (existingUser) {
-      setIsLoading(false);
-      return { success: false, error: 'An account with this email already exists' };
+    if (error) {
+      return { success: false, error: error.message };
     }
 
-    // Create new user
-    const newUser: User = {
-      id: Date.now(),
-      name,
-      email,
-      role,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Add to mock users (in-memory only for demo)
-    mockUsers.push({ ...newUser, password });
-
-    // Create mock token
-    const mockToken = `mock_jwt_${Date.now()}_${newUser.id}`;
-
-    // Save to state and localStorage
-    setToken(mockToken);
-    setUser(newUser);
-    localStorage.setItem(TOKEN_KEY, mockToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
-
-    setIsLoading(false);
+    // Note: Profile is auto-created by the database trigger
+    // We'll update the role after the profile is created
+    // The user needs to verify their email first
     return { success: true };
   };
 
-  // Logout function
-  const logout = () => {
-    setToken(null);
+  // Logout
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, signup, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Custom hook to use auth context
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {

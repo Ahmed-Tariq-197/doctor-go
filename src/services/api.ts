@@ -1,79 +1,110 @@
 // ============================================
 // API Service Layer
-// Centralizes all API calls for the application
-// For MVP demo, uses mock data; easy to switch to real API
+// Uses Supabase for real data access
 // ============================================
 
-import { 
-  Doctor, 
-  Appointment, 
-  QueueEntry, 
-  Payment, 
-  Recommendation, 
-  ApiResponse 
+import {
+  Doctor,
+  Appointment,
+  QueueEntry,
+  Payment,
+  Recommendation,
+  ApiResponse,
+  AppointmentSlot,
 } from '@/types';
-import { 
-  mockDoctors, 
-  mockAppointments, 
-  mockQueueEntries, 
-  specialtyKeywords 
-} from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
 
-// Configuration - change this to your backend URL when ready
-const API_BASE_URL = '/api'; // Will be http://localhost:3001/api in production
-
-// Helper to get auth token
-const getToken = (): string | null => {
-  return localStorage.getItem('doctorgo_token');
+// Specialty to symptom keyword mapping for recommendations
+const specialtyKeywords: Record<string, string[]> = {
+  'General Practice': ['fever', 'cold', 'flu', 'cough', 'headache', 'fatigue', 'checkup', 'vaccination', 'general'],
+  'Cardiology': ['heart', 'chest pain', 'palpitations', 'blood pressure', 'hypertension', 'cardiac', 'breathing'],
+  'Pediatrics': ['child', 'baby', 'infant', 'toddler', 'kids', 'childhood', 'growth', 'development'],
+  'Dermatology': ['skin', 'rash', 'acne', 'eczema', 'psoriasis', 'mole', 'hair loss', 'itching'],
+  'Orthopedics': ['bone', 'joint', 'muscle', 'back pain', 'knee', 'shoulder', 'fracture', 'arthritis', 'sports injury'],
 };
 
-// Helper to create headers with auth
-const getHeaders = (): HeadersInit => {
-  const token = getToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+// Generate time slots for a doctor (client-side)
+const generateSlots = (doctorId: string): AppointmentSlot[] => {
+  const slots: AppointmentSlot[] = [];
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  [today, tomorrow].forEach((date, dayIndex) => {
+    for (let hour = 9; hour <= 17; hour++) {
+      const slotDate = new Date(date);
+      slotDate.setHours(hour, 0, 0, 0);
+      slots.push({
+        id: dayIndex * 20 + hour,
+        time: slotDate.toISOString(),
+        available: Math.random() > 0.3,
+      });
+    }
+  });
+  return slots;
 };
 
 // ============================================
 // DOCTOR ENDPOINTS
 // ============================================
 
-// Get all doctors with optional filters
-export const getDoctors = async (
-  specialty?: string,
-  name?: string
-): Promise<ApiResponse<Doctor[]>> => {
-  // For MVP demo, filter mock data
-  let doctors = [...mockDoctors];
+export const getDoctors = async (): Promise<ApiResponse<Doctor[]>> => {
+  const { data, error } = await supabase
+    .from('doctors')
+    .select('*')
+    .order('rating', { ascending: false });
 
-  if (specialty) {
-    doctors = doctors.filter(d => 
-      d.specialty.toLowerCase().includes(specialty.toLowerCase())
-    );
+  if (error) {
+    return { success: false, error: error.message };
   }
 
-  if (name) {
-    doctors = doctors.filter(d => 
-      d.name.toLowerCase().includes(name.toLowerCase())
-    );
-  }
-
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 300));
+  const doctors: Doctor[] = (data || []).map(d => ({
+    id: d.id,
+    userId: d.user_id,
+    name: d.name,
+    email: d.email,
+    specialty: d.specialty,
+    rating: d.rating,
+    cost: Number(d.cost),
+    clinicId: d.clinic_id,
+    clinicName: d.clinic_name,
+    clinicAddress: d.clinic_address,
+    lat: d.lat,
+    lng: d.lng,
+    queueLength: d.queue_length,
+    availableSlots: generateSlots(d.id),
+  }));
 
   return { success: true, data: doctors };
 };
 
-// Get single doctor by ID
-export const getDoctorById = async (id: number): Promise<ApiResponse<Doctor>> => {
-  await new Promise(resolve => setTimeout(resolve, 200));
+export const getDoctorById = async (id: string): Promise<ApiResponse<Doctor>> => {
+  const { data, error } = await supabase
+    .from('doctors')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
 
-  const doctor = mockDoctors.find(d => d.id === id);
-  if (!doctor) {
-    return { success: false, error: 'Doctor not found' };
+  if (error || !data) {
+    return { success: false, error: error?.message || 'Doctor not found' };
   }
+
+  const doctor: Doctor = {
+    id: data.id,
+    userId: data.user_id,
+    name: data.name,
+    email: data.email,
+    specialty: data.specialty,
+    rating: data.rating,
+    cost: Number(data.cost),
+    clinicId: data.clinic_id,
+    clinicName: data.clinic_name,
+    clinicAddress: data.clinic_address,
+    lat: data.lat,
+    lng: data.lng,
+    queueLength: data.queue_length,
+    availableSlots: generateSlots(data.id),
+  };
 
   return { success: true, data: doctor };
 };
@@ -82,153 +113,244 @@ export const getDoctorById = async (id: number): Promise<ApiResponse<Doctor>> =>
 // QUEUE ENDPOINTS
 // ============================================
 
-// Join the queue for a doctor
-export const joinQueue = async (doctorId: number): Promise<ApiResponse<QueueEntry>> => {
-  await new Promise(resolve => setTimeout(resolve, 300));
+export const joinQueue = async (doctorId: string): Promise<ApiResponse<QueueEntry>> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: 'Not authenticated' };
 
-  const doctor = mockDoctors.find(d => d.id === doctorId);
-  if (!doctor) {
-    return { success: false, error: 'Doctor not found' };
-  }
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('user_id', user.id)
+    .maybeSingle();
 
-  // Create new queue entry
-  const newEntry: QueueEntry = {
-    id: Date.now(),
-    patientId: 1, // Would come from auth in real app
-    patientName: 'Current User',
-    doctorId,
-    doctorName: doctor.name,
-    joinedAt: new Date().toISOString(),
-    status: 'waiting',
-    position: doctor.queueLength + 1,
+  const { data: doctor } = await supabase
+    .from('doctors')
+    .select('name, queue_length')
+    .eq('id', doctorId)
+    .maybeSingle();
+
+  if (!doctor) return { success: false, error: 'Doctor not found' };
+
+  const { data, error } = await supabase
+    .from('queue_entries')
+    .insert({
+      patient_id: user.id,
+      patient_name: profile?.full_name || user.email || '',
+      doctor_id: doctorId,
+      doctor_name: doctor.name,
+      position: doctor.queue_length + 1,
+    })
+    .select()
+    .single();
+
+  if (error) return { success: false, error: error.message };
+
+  // Increment queue length
+  await supabase
+    .from('doctors')
+    .update({ queue_length: doctor.queue_length + 1 })
+    .eq('id', doctorId);
+
+  return {
+    success: true,
+    data: {
+      id: data.id,
+      patientId: data.patient_id,
+      patientName: data.patient_name,
+      doctorId: data.doctor_id,
+      doctorName: data.doctor_name,
+      joinedAt: data.joined_at,
+      status: data.status as any,
+      position: data.position,
+    },
   };
-
-  // Update mock queue length
-  doctor.queueLength += 1;
-  mockQueueEntries.push(newEntry);
-
-  return { success: true, data: newEntry };
 };
 
-// Get queue entries for a doctor
-export const getQueue = async (doctorId: number): Promise<ApiResponse<QueueEntry[]>> => {
-  await new Promise(resolve => setTimeout(resolve, 200));
+export const getQueue = async (doctorId: string): Promise<ApiResponse<QueueEntry[]>> => {
+  const { data, error } = await supabase
+    .from('queue_entries')
+    .select('*')
+    .eq('doctor_id', doctorId)
+    .eq('status', 'waiting')
+    .order('joined_at', { ascending: true });
 
-  const entries = mockQueueEntries.filter(
-    q => q.doctorId === doctorId && q.status === 'waiting'
-  );
+  if (error) return { success: false, error: error.message };
+
+  const entries: QueueEntry[] = (data || []).map(e => ({
+    id: e.id,
+    patientId: e.patient_id,
+    patientName: e.patient_name,
+    doctorId: e.doctor_id,
+    doctorName: e.doctor_name,
+    joinedAt: e.joined_at,
+    status: e.status as any,
+    position: e.position,
+  }));
 
   return { success: true, data: entries };
 };
 
-// Invite next patient (doctor action)
-export const inviteNextPatient = async (doctorId: number): Promise<ApiResponse<QueueEntry | null>> => {
-  await new Promise(resolve => setTimeout(resolve, 300));
+export const inviteNextPatient = async (doctorId: string): Promise<ApiResponse<QueueEntry | null>> => {
+  const { data: entries } = await supabase
+    .from('queue_entries')
+    .select('*')
+    .eq('doctor_id', doctorId)
+    .eq('status', 'waiting')
+    .order('joined_at', { ascending: true })
+    .limit(1);
 
-  const waitingEntries = mockQueueEntries.filter(
-    q => q.doctorId === doctorId && q.status === 'waiting'
-  );
-
-  if (waitingEntries.length === 0) {
+  if (!entries || entries.length === 0) {
     return { success: true, data: null, message: 'No patients in queue' };
   }
 
-  // Get the first (oldest) waiting patient
-  const nextPatient = waitingEntries.sort(
-    (a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime()
-  )[0];
+  const next = entries[0];
+  await supabase
+    .from('queue_entries')
+    .update({ status: 'invited' })
+    .eq('id', next.id);
 
-  // Update status
-  const entryIndex = mockQueueEntries.findIndex(q => q.id === nextPatient.id);
-  if (entryIndex >= 0) {
-    mockQueueEntries[entryIndex].status = 'invited';
+  // Decrement queue length
+  const { data: doctor } = await supabase
+    .from('doctors')
+    .select('queue_length')
+    .eq('id', doctorId)
+    .maybeSingle();
+
+  if (doctor && doctor.queue_length > 0) {
+    await supabase
+      .from('doctors')
+      .update({ queue_length: doctor.queue_length - 1 })
+      .eq('id', doctorId);
   }
 
-  // Update queue length
-  const doctor = mockDoctors.find(d => d.id === doctorId);
-  if (doctor && doctor.queueLength > 0) {
-    doctor.queueLength -= 1;
-  }
-
-  return { success: true, data: nextPatient };
+  return {
+    success: true,
+    data: {
+      id: next.id,
+      patientId: next.patient_id,
+      patientName: next.patient_name,
+      doctorId: next.doctor_id,
+      doctorName: next.doctor_name,
+      joinedAt: next.joined_at,
+      status: 'invited',
+      position: next.position,
+    },
+  };
 };
 
 // ============================================
 // APPOINTMENT ENDPOINTS
 // ============================================
 
-// Create a new appointment
 export const createAppointment = async (
-  doctorId: number,
+  doctorId: string,
   appointmentTime: string
 ): Promise<ApiResponse<Appointment>> => {
-  await new Promise(resolve => setTimeout(resolve, 300));
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: 'Not authenticated' };
 
-  const doctor = mockDoctors.find(d => d.id === doctorId);
-  if (!doctor) {
-    return { success: false, error: 'Doctor not found' };
-  }
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('user_id', user.id)
+    .maybeSingle();
 
-  const newAppointment: Appointment = {
-    id: Date.now(),
-    patientId: 1, // Would come from auth
-    patientName: 'Current User',
-    doctorId,
-    doctorName: doctor.name,
-    appointmentTime,
-    status: 'scheduled',
-    createdAt: new Date().toISOString(),
+  const { data: doctor } = await supabase
+    .from('doctors')
+    .select('name')
+    .eq('id', doctorId)
+    .maybeSingle();
+
+  if (!doctor) return { success: false, error: 'Doctor not found' };
+
+  const { data, error } = await supabase
+    .from('appointments')
+    .insert({
+      patient_id: user.id,
+      patient_name: profile?.full_name || user.email || '',
+      doctor_id: doctorId,
+      doctor_name: doctor.name,
+      appointment_time: appointmentTime,
+    })
+    .select()
+    .single();
+
+  if (error) return { success: false, error: error.message };
+
+  return {
+    success: true,
+    data: {
+      id: data.id,
+      patientId: data.patient_id,
+      patientName: data.patient_name,
+      doctorId: data.doctor_id,
+      doctorName: data.doctor_name,
+      appointmentTime: data.appointment_time,
+      status: data.status as any,
+      createdAt: data.created_at,
+    },
   };
-
-  mockAppointments.push(newAppointment);
-
-  // Mark the slot as unavailable
-  const slotIndex = doctor.availableSlots.findIndex(s => s.time === appointmentTime);
-  if (slotIndex >= 0) {
-    doctor.availableSlots[slotIndex].available = false;
-  }
-
-  return { success: true, data: newAppointment };
 };
 
-// Get appointments for current user or doctor
-export const getAppointments = async (
-  doctorId?: number
-): Promise<ApiResponse<Appointment[]>> => {
-  await new Promise(resolve => setTimeout(resolve, 200));
-
-  let appointments = [...mockAppointments];
+export const getAppointments = async (doctorId?: string): Promise<ApiResponse<Appointment[]>> => {
+  let query = supabase.from('appointments').select('*').order('appointment_time', { ascending: true });
 
   if (doctorId) {
-    appointments = appointments.filter(a => a.doctorId === doctorId);
+    query = query.eq('doctor_id', doctorId);
   }
+
+  const { data, error } = await query;
+
+  if (error) return { success: false, error: error.message };
+
+  const appointments: Appointment[] = (data || []).map(a => ({
+    id: a.id,
+    patientId: a.patient_id,
+    patientName: a.patient_name,
+    doctorId: a.doctor_id,
+    doctorName: a.doctor_name,
+    appointmentTime: a.appointment_time,
+    status: a.status as any,
+    createdAt: a.created_at,
+  }));
 
   return { success: true, data: appointments };
 };
 
-// Update appointment status
 export const updateAppointment = async (
-  id: number,
+  id: string,
   status: 'scheduled' | 'completed' | 'cancelled' | 'in-progress'
 ): Promise<ApiResponse<Appointment>> => {
-  await new Promise(resolve => setTimeout(resolve, 200));
+  const { data, error } = await supabase
+    .from('appointments')
+    .update({ status })
+    .eq('id', id)
+    .select()
+    .single();
 
-  const index = mockAppointments.findIndex(a => a.id === id);
-  if (index < 0) {
-    return { success: false, error: 'Appointment not found' };
-  }
+  if (error) return { success: false, error: error.message };
 
-  mockAppointments[index].status = status;
-  return { success: true, data: mockAppointments[index] };
+  return {
+    success: true,
+    data: {
+      id: data.id,
+      patientId: data.patient_id,
+      patientName: data.patient_name,
+      doctorId: data.doctor_id,
+      doctorName: data.doctor_name,
+      appointmentTime: data.appointment_time,
+      status: data.status as any,
+      createdAt: data.created_at,
+    },
+  };
 };
 
 // ============================================
-// PAYMENT ENDPOINTS
+// PAYMENT ENDPOINTS (still mock for now)
 // ============================================
 
-// Mock payment processing
 export const processPayment = async (
-  appointmentId: number,
+  appointmentId: string,
   amount: number
 ): Promise<ApiResponse<Payment>> => {
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -249,21 +371,24 @@ export const processPayment = async (
 // RECOMMENDATION ENDPOINT
 // ============================================
 
-// Get doctor recommendations based on symptoms
 export const getRecommendations = async (
   query: string
 ): Promise<ApiResponse<Recommendation[]>> => {
-  await new Promise(resolve => setTimeout(resolve, 400));
+  // Fetch all doctors from DB
+  const { data: doctors, error } = await supabase
+    .from('doctors')
+    .select('*');
+
+  if (error || !doctors) {
+    return { success: false, error: error?.message || 'Failed to load doctors' };
+  }
 
   const queryLower = query.toLowerCase();
   const recommendations: Recommendation[] = [];
 
-  // Simple keyword matching algorithm
-  for (const doctor of mockDoctors) {
+  for (const doctor of doctors) {
     const keywords = specialtyKeywords[doctor.specialty] || [];
-    const matchedKeywords = keywords.filter(keyword => 
-      queryLower.includes(keyword)
-    );
+    const matchedKeywords = keywords.filter(keyword => queryLower.includes(keyword));
 
     if (matchedKeywords.length > 0) {
       const matchScore = Math.round((matchedKeywords.length / keywords.length) * 100);
@@ -277,13 +402,11 @@ export const getRecommendations = async (
     }
   }
 
-  // Sort by match score and return top 3
   recommendations.sort((a, b) => b.matchScore - a.matchScore);
   const topRecommendations = recommendations.slice(0, 3);
 
-  // If no matches, suggest general practice
   if (topRecommendations.length === 0) {
-    const gpDoctor = mockDoctors.find(d => d.specialty === 'General Practice');
+    const gpDoctor = doctors.find(d => d.specialty === 'General Practice');
     if (gpDoctor) {
       topRecommendations.push({
         doctorId: gpDoctor.id,

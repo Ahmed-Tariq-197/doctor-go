@@ -1,6 +1,6 @@
 // ============================================
 // DoctorGo Type Definitions
-// These types define the shape of our data
+// Updated to use UUID strings for Supabase
 // ============================================
 
 // User roles in the system
@@ -8,7 +8,7 @@ export type UserRole = 'patient' | 'doctor' | 'secretary' | 'admin';
 
 // User object returned from auth
 export interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: UserRole;
@@ -17,23 +17,24 @@ export interface User {
 
 // Doctor with full profile information
 export interface Doctor {
-  id: number;
-  userId: number;
+  id: string;
+  userId?: string | null;
   name: string;
-  email: string;
+  email: string | null;
   specialty: string;
   rating: number;
   cost: number;
-  clinicId: number;
-  clinicName: string;
-  clinicAddress: string;
+  clinicId?: string | null;
+  clinicName: string | null;
+  clinicAddress: string | null;
   lat: number;
   lng: number;
   queueLength: number;
   availableSlots: AppointmentSlot[];
+  distance?: number;
 }
 
-// A single appointment time slot
+// A single appointment time slot (generated client-side)
 export interface AppointmentSlot {
   id: number;
   time: string;
@@ -42,7 +43,7 @@ export interface AppointmentSlot {
 
 // Clinic information
 export interface Clinic {
-  id: number;
+  id: string;
   name: string;
   address: string;
   lat: number;
@@ -54,10 +55,10 @@ export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'in-pr
 
 // Appointment record
 export interface Appointment {
-  id: number;
-  patientId: number;
+  id: string;
+  patientId: string;
   patientName: string;
-  doctorId: number;
+  doctorId: string;
   doctorName: string;
   appointmentTime: string;
   status: AppointmentStatus;
@@ -68,29 +69,29 @@ export interface Appointment {
 export type QueueStatus = 'waiting' | 'invited' | 'completed' | 'cancelled';
 
 export interface QueueEntry {
-  id: number;
-  patientId: number;
+  id: string;
+  patientId: string;
   patientName: string;
-  doctorId: number;
+  doctorId: string;
   doctorName: string;
   joinedAt: string;
   status: QueueStatus;
   position: number;
 }
 
-// Payment record (mock)
+// Payment record (mock for now)
 export interface Payment {
   id: number;
-  appointmentId: number;
+  appointmentId: string;
   amount: number;
   method: string;
   paidAt: string;
   receiptNumber: string;
 }
 
-// Recommendation result from the AI
+// Recommendation result
 export interface Recommendation {
-  doctorId: number;
+  doctorId: string;
   doctorName: string;
   specialty: string;
   matchScore: number;
@@ -100,7 +101,6 @@ export interface Recommendation {
 // Auth context type
 export interface AuthContextType {
   user: User | null;
-  token: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (name: string, email: string, password: string, role: UserRole) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;

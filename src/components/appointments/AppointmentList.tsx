@@ -1,6 +1,6 @@
 // ============================================
 // Appointment List Component
-// Shows list of appointments
+// Shows list of appointments (updated for string IDs)
 // ============================================
 
 import React from 'react';
@@ -14,8 +14,8 @@ import { format } from 'date-fns';
 interface AppointmentListProps {
   appointments: Appointment[];
   isDoctor?: boolean;
-  onCancel?: (id: number) => void;
-  onComplete?: (id: number) => void;
+  onCancel?: (id: string) => void;
+  onComplete?: (id: string) => void;
   isLoading?: boolean;
 }
 
@@ -41,7 +41,6 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
   onComplete,
   isLoading = false,
 }) => {
-  // Sort appointments by date, most recent first
   const sortedAppointments = [...appointments].sort(
     (a, b) => new Date(a.appointmentTime).getTime() - new Date(b.appointmentTime).getTime()
   );
@@ -68,7 +67,6 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
                 className="flex items-start justify-between p-4 rounded-lg border border-border bg-card hover:bg-accent/5 transition-colors"
               >
                 <div className="space-y-2">
-                  {/* Date and Time */}
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-primary" />
                     <span className="font-medium text-foreground">
@@ -78,44 +76,27 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
                       at {format(new Date(appointment.appointmentTime), 'h:mm a')}
                     </span>
                   </div>
-
-                  {/* Doctor or Patient Name */}
                   <div className="flex items-center gap-2 text-sm">
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">
                       {isDoctor ? appointment.patientName : appointment.doctorName}
                     </span>
                   </div>
-
-                  {/* Status Badge */}
                   <Badge className={getStatusColor(appointment.status)}>
                     {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
                   </Badge>
                 </div>
 
-                {/* Action Buttons */}
                 {appointment.status === 'scheduled' && (
                   <div className="flex gap-2">
                     {isDoctor && onComplete && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onComplete(appointment.id)}
-                        disabled={isLoading}
-                        className="gap-1"
-                      >
+                      <Button size="sm" variant="outline" onClick={() => onComplete(appointment.id)} disabled={isLoading} className="gap-1">
                         <CheckCircle className="h-3 w-3" />
                         Complete
                       </Button>
                     )}
                     {onCancel && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onCancel(appointment.id)}
-                        disabled={isLoading}
-                        className="gap-1 text-destructive hover:text-destructive"
-                      >
+                      <Button size="sm" variant="ghost" onClick={() => onCancel(appointment.id)} disabled={isLoading} className="gap-1 text-destructive hover:text-destructive">
                         <X className="h-3 w-3" />
                         Cancel
                       </Button>
