@@ -18,6 +18,7 @@ import DoctorProfilePage from "./pages/DoctorProfilePage";
 import DashboardPage from "./pages/DashboardPage";
 import AppointmentsPage from "./pages/AppointmentsPage";
 import RecommendationsPage from "./pages/RecommendationsPage";
+import ProfilePage from "./pages/ProfilePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
             {/* Protected Routes */}
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/appointments" element={<AppointmentsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />

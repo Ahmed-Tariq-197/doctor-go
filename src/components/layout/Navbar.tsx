@@ -18,6 +18,7 @@ import {
   LogOut, 
   LayoutDashboard, 
   Calendar,
+  Settings,
   Menu,
   X
 } from 'lucide-react';
@@ -39,7 +40,7 @@ const Navbar: React.FC = () => {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <img src={doctorGoLogo} alt="DoctorGo" className="h-10 w-auto mix-blend-multiply dark:mix-blend-screen dark:invert" />
+            <img src={doctorGoLogo} alt="DoctorGo" className="h-14 w-auto mix-blend-multiply dark:mix-blend-screen dark:invert" />
           </Link>
 
           {/* Desktop Navigation */}
@@ -67,6 +68,10 @@ const Navbar: React.FC = () => {
                   <DropdownMenuItem onClick={() => navigate('/appointments')}>
                     <Calendar className="h-4 w-4 mr-2" />
                     My Appointments
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/profile')}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Profile Settings
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                     <LogOut className="h-4 w-4 mr-2" />
@@ -129,6 +134,13 @@ const Navbar: React.FC = () => {
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     My Appointments
+                  </Link>
+                  <Link 
+                    to="/profile" 
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Profile Settings
                   </Link>
                   <button 
                     onClick={() => { handleLogout(); setMobileMenuOpen(false); }}

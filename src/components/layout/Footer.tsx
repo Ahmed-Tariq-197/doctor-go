@@ -16,7 +16,7 @@ const Footer: React.FC = () => {
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <img src={doctorGoLogo} alt="DoctorGo" className="h-8 w-auto mix-blend-multiply dark:mix-blend-screen dark:invert" />
+              <img src={doctorGoLogo} alt="DoctorGo" className="h-12 w-auto mix-blend-multiply dark:mix-blend-screen dark:invert" />
             </div>
             <p className="text-sm text-muted-foreground">
               Your trusted healthcare companion. Find doctors, book appointments, and manage your health journey with ease.
