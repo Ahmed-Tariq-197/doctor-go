@@ -293,10 +293,15 @@ export const createAppointment = async (
 };
 
 export const getAppointments = async (doctorId?: string): Promise<ApiResponse<Appointment[]>> => {
+  const { data: { user } } = await supabase.auth.getUser();
+
   let query = supabase.from('appointments').select('*').order('appointment_time', { ascending: true });
 
   if (doctorId) {
     query = query.eq('doctor_id', doctorId);
+  } else if (user) {
+    // For patients, filter to only their own appointments
+    query = query.eq('patient_id', user.id);
   }
 
   const { data, error } = await query;

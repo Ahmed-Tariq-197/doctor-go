@@ -51,6 +51,11 @@ const DoctorCard = ({ doctor }: DoctorCardProps) => {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <MapPin className="h-4 w-4 text-primary" />
             <span className="truncate">{doctor.clinicName}</span>
+            {doctor.distance !== undefined && (
+              <span className="ml-auto flex-shrink-0 text-xs font-medium text-primary">
+                {doctor.distance.toFixed(1)} km
+              </span>
+            )}
           </div>
 
           {/* Cost */}
