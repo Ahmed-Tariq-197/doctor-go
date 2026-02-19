@@ -13,6 +13,7 @@ import DoctorCard from '@/components/doctors/DoctorCard';
 import MapPlaceholder from '@/components/doctors/MapPlaceholder';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import doctorGoLogo from '@/assets/doctorgo-logo.png';
 import { 
   Search, 
   Stethoscope, 
@@ -63,6 +64,16 @@ const Index: React.FC = () => {
         <section className="relative py-20 px-4 overflow-hidden">
           {/* Background Pattern */}
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/10" />
+
+          {/* Large Logo Watermark */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden">
+            <img
+              src={doctorGoLogo}
+              alt=""
+              aria-hidden="true"
+              className="w-[600px] md:w-[800px] lg:w-[1000px] max-w-none opacity-[0.04] mix-blend-multiply dark:mix-blend-screen dark:invert"
+            />
+          </div>
           
           <div className="container mx-auto relative z-10">
             <div className="max-w-3xl mx-auto text-center">
